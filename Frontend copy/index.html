@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI-Driven Doctor Recommendation Platform</title>
+    <script>
+      // Clear any old localStorage authentication data
+      // This ensures no automatic login from old cached data
+      localStorage.removeItem("doctor");
+      localStorage.removeItem("doctorId");
+      localStorage.removeItem("patient");
+      localStorage.removeItem("patientId");
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

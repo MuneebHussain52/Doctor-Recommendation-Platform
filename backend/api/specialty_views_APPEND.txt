@@ -1,0 +1,163 @@
+
+
+# Specialty Management Views
+@method_decorator(csrf_exempt, name='dispatch')
+class SpecialtyListAPIView(APIView):
+    """Get list of all approved specialties for dropdown"""
+    def get(self, request):
+        from api.models import Specialty
+        
+        # Get all approved specialties (both predefined and custom approved ones)
+        specialties = Specialty.objects.filter(
+            approval_status='approved'
+        ).order_by('name').values_list('name', flat=True)
+        
+        return Response({
+            'specialties': list(specialties)
+        }, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PendingSpecialtyListAPIView(APIView):
+    """Get list of pending specialty requests (admin only)"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def get(self, request):
+        from api.models import Specialty
+        
+        pending_specialties = Specialty.objects.filter(
+            approval_status='pending'
+        ).select_related('requested_by').order_by('-created_at')
+        
+        specialty_data = []
+        for specialty in pending_specialties:
+            specialty_data.append({
+                'id': str(specialty.id),
+                'name': specialty.name,
+                'requested_by': {
+                    'id': specialty.requested_by.id if specialty.requested_by else None,
+                    'name': f"Dr. {specialty.requested_by.first_name} {specialty.requested_by.last_name}" if specialty.requested_by else 'Unknown',
+                    'email': specialty.requested_by.email if specialty.requested_by else None,
+                } if specialty.requested_by else None,
+                'created_at': specialty.created_at.isoformat(),
+            })
+        
+        return Response(specialty_data, status=status.HTTP_200_OK)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class ApproveSpecialtyAPIView(APIView):
+    """Approve a specialty request (admin only)"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def post(self, request, specialty_id):
+        from api.models import Specialty
+        from django.utils import timezone
+        
+        try:
+            specialty = Specialty.objects.get(id=specialty_id)
+            
+            if specialty.approval_status != 'pending':
+                return Response(
+                    {'error': 'Specialty is not pending approval'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get admin user
+            admin_email = request.user.email
+            admin_user = AdminUser.objects.filter(email=admin_email).first()
+            
+            # Approve the specialty
+            specialty.approval_status = 'approved'
+            specialty.approved_by = admin_user
+            specialty.approved_at = timezone.now()
+            specialty.save()
+            
+            # Update all doctors with pending_specialty matching this specialty
+            doctors_updated = Doctor.objects.filter(
+                pending_specialty=specialty.name
+            ).update(
+                specialty=specialty.name,
+                pending_specialty=None
+            )
+            
+            # Notify doctors whose specialty was approved
+            for doctor in Doctor.objects.filter(specialty=specialty.name):
+                Notification.objects.create(
+                    user_type='doctor',
+                    user_id=doctor.id,
+                    notification_type='system',
+                    title='Specialty Approved',
+                    message=f'Your requested specialty "{specialty.name}" has been approved by the administrator.',
+                    is_read=False
+                )
+            
+            return Response({
+                'message': 'Specialty approved successfully',
+                'specialty': {
+                    'id': str(specialty.id),
+                    'name': specialty.name,
+                    'approval_status': specialty.approval_status,
+                    'doctors_updated': doctors_updated,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Specialty.DoesNotExist:
+            return Response(
+                {'error': 'Specialty not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class RejectSpecialtyAPIView(APIView):
+    """Reject a specialty request (admin only)"""
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    def post(self, request, specialty_id):
+        from api.models import Specialty
+        
+        try:
+            specialty = Specialty.objects.get(id=specialty_id)
+            
+            if specialty.approval_status != 'pending':
+                return Response(
+                    {'error': 'Specialty is not pending approval'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            rejection_reason = request.data.get('reason', '')
+            
+            # Reject the specialty
+            specialty.approval_status = 'rejected'
+            specialty.rejection_reason = rejection_reason
+            specialty.save()
+            
+            # Notify doctors who requested this specialty
+            if specialty.requested_by:
+                Notification.objects.create(
+                    user_type='doctor',
+                    user_id=specialty.requested_by.id,
+                    notification_type='system',
+                    title='Specialty Request Rejected',
+                    message=f'Your requested specialty "{specialty.name}" has been rejected. Reason: {rejection_reason or "No reason provided"}',
+                    is_read=False
+                )
+            
+            return Response({
+                'message': 'Specialty rejected successfully',
+                'specialty': {
+                    'id': str(specialty.id),
+                    'name': specialty.name,
+                    'approval_status': specialty.approval_status,
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Specialty.DoesNotExist:
+            return Response(
+                {'error': 'Specialty not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
