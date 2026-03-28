@@ -1,0 +1,9 @@
+.env
+*.env
+.env.local
+.env.production
+__pycache__/
+node_modules/
+*.pyc
+.DS_Store
+db.sqlite3
