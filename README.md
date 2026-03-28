@@ -124,7 +124,18 @@ The project includes validation tests for:
 ---
 
 ## 📸 Screenshots
-> Add screenshots of your dashboards here for maximum impact
+
+### Patient Dashboard
+![Patient Dashboard](Docs/screenshots/patient-dashboard.png)
+
+### Doctor Recommendations
+![Recommendations](Docs/screenshots/recommendations.png)
+
+### Doctor Dashboard
+![Doctor Dashboard](Docs/screenshots/doctor-dashboard.png)
+
+### Admin Panel
+![Admin Panel](Docs/screenshots/admin-panel.png)
 
 ---
 
